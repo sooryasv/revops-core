@@ -1,0 +1,12 @@
+# Trivy configuration (03 section 12): fail the build on HIGH or CRITICAL findings that have a fix available.
+# Used by CI for both the image scan and the config (Dockerfile, compose, workflows) scan.
+severity:
+  - HIGH
+  - CRITICAL
+ignore-unfixed: true
+exit-code: 1
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret

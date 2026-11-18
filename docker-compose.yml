@@ -1,0 +1,49 @@
+# Local stack: PostgreSQL 17 (pgvector image so Project 2 can reuse it) and the app.
+# Dev-only passwords below. WROTE-NOT-RUN in the build sandbox (no Docker daemon); see docs/LOCAL_VERIFICATION.md.
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dev-only-postgres-password
+      POSTGRES_DB: revops
+      REVOPS_OWNER_PASSWORD: dev-only-owner-password
+      REVOPS_APP_PASSWORD: dev-only-app-password
+      AI_READER_PASSWORD: dev-only-ai-password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Creates the three roles (contract/roles.sql, written in M2) on first start only.
+      - ./infra/docker/initdb/10-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro
+      - ./contract/roles.sql:/contract/roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d revops"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENV: dev
+      DATABASE_URL: postgresql+asyncpg://revops_app:dev-only-app-password@db:5432/revops
+      MIGRATION_DATABASE_URL: postgresql+asyncpg://revops_owner:dev-only-owner-password@db:5432/revops
+      ALLOWED_ORIGINS: http://localhost:8000
+      PUBLIC_BASE_URL: http://localhost:8000
+      PAYMENT_PROVIDER: fake
+      RUN_MIGRATIONS: "1"
+      SEED_DEMO_PASSWORD: change-me-demo-only
+      SEED_DEMO: "1"
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:

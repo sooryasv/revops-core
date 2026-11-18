@@ -1,0 +1,172 @@
+# Full gate set (03 section 12, 04 M9). WROTE-NOT-RUN: GitHub Actions cannot run in the build sandbox; every command below
+# except the Docker, Trivy and gitleaks steps was run locally (see .build/PROGRESS.md, M9 report).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      TEST_ADMIN_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: PostgreSQL client (psql is used to load contract/roles.sql)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy --strict app
+      - name: "Tests with coverage (overall gate comes from pyproject, fail_under = 80)"
+        run: uv run pytest -q --cov=app --cov-report=term-missing
+      - name: Coverage gate, domain >= 95
+        run: uv run coverage report --include="app/domain/*" --fail-under=95
+      - name: Coverage gate, services >= 85
+        run: uv run coverage report --include="app/services/*" --fail-under=85
+      - name: Dependency audit (fails on any known vulnerability)
+        run: |
+          uv export --frozen --no-dev --no-hashes --no-emit-project -o requirements.audit.txt
+          uv run pip-audit -r requirements.audit.txt --no-deps --disable-pip
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Dependency audit (production dependencies, fail on high or critical)
+        run: npm audit --omit=dev --audit-level=high
+
+  client-drift:
+    # The typed client must equal what the backend's OpenAPI produces (03 section 10).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: uv sync --frozen
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run api:check
+        working-directory: frontend
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      E2E_ADMIN_URL: postgresql://postgres:ci-only-password@127.0.0.1:5432/postgres
+      PGPASSWORD: ci-only-password
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - run: uv sync --frozen
+        working-directory: backend
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - run: npm ci
+        working-directory: e2e
+      - run: npm run typecheck
+        working-directory: e2e
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Playwright (three flows plus axe scans, fake provider, real database)
+        run: npx playwright test
+        working-directory: e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t revops-core:ci .
+      - name: Trivy image scan (HIGH/CRITICAL with a fix fail the build)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: revops-core:ci
+          trivy-config: trivy.yaml
+      - name: Trivy config scan (Dockerfile, compose, workflows)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: config
+          scan-ref: .
+          trivy-config: trivy.yaml
+      - name: Container starts and answers /healthz
+        run: |
+          docker run -d --name probe -p 8000:8000 \
+            -e ENV=dev -e DATABASE_URL=postgresql+asyncpg://u:p@127.0.0.1:1/none revops-core:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8000/healthz && exit 0; sleep 1; done
+          docker logs probe; exit 1

@@ -1,0 +1,68 @@
+{
+  "contract_version": "1.0.0",
+  "note": "overdue and outstanding are as of `today`; the ai views use the database clock (IST date).",
+  "orgs": {
+    "Kovai Precision Components (demo)": {
+      "invoices_by_status": {
+        "draft": 8,
+        "issued": 124,
+        "void": 8
+      },
+      "org_id": "ec0d27bf-685d-5feb-be17-85f4e95e6aca",
+      "outstanding_paise": 3433133743,
+      "overdue_invoices": 59,
+      "overdue_paise": 2652697333,
+      "poison_note_customer_id": "056fac35-a59b-5d73-a47e-d17fec1e32ae",
+      "row_counts": {
+        "audit_logs": 229,
+        "customers": 25,
+        "deals": 22,
+        "invoice_items": 265,
+        "invoice_sequences": 2,
+        "invoices": 140,
+        "organizations": 1,
+        "payment_orders": 43,
+        "payments": 87,
+        "users": 3,
+        "webhook_events": 84
+      },
+      "visible_webhook_events_by_status": {
+        "failed": 1,
+        "processed": 82,
+        "quarantined": 1
+      }
+    },
+    "Tiruppur Knit Exports (demo)": {
+      "invoices_by_status": {
+        "draft": 8,
+        "issued": 124,
+        "void": 8
+      },
+      "org_id": "0e4343c8-6f63-505c-97a7-43b3470d1869",
+      "outstanding_paise": 3830756828,
+      "overdue_invoices": 56,
+      "overdue_paise": 3068658638,
+      "poison_note_customer_id": null,
+      "row_counts": {
+        "audit_logs": 232,
+        "customers": 25,
+        "deals": 22,
+        "invoice_items": 273,
+        "invoice_sequences": 2,
+        "invoices": 140,
+        "organizations": 1,
+        "payment_orders": 43,
+        "payments": 90,
+        "users": 3,
+        "webhook_events": 84
+      },
+      "visible_webhook_events_by_status": {
+        "failed": 1,
+        "processed": 82,
+        "quarantined": 1
+      }
+    }
+  },
+  "seed": 42,
+  "today": "2026-11-04"
+}

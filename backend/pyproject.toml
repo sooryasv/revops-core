@@ -1,0 +1,114 @@
+[project]
+name = "revops-core"
+version = "0.1.0"
+description = "Multi-tenant lead-to-cash API for small Indian suppliers (portfolio and learning project)."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy[asyncio]",
+    "asyncpg",
+    "alembic",
+    "pydantic",
+    "pydantic-settings",
+    "email-validator",
+    "pyjwt",
+    "cryptography",
+    "argon2-cffi",
+    "httpx",
+    "structlog",
+    "limits",
+    "uuid-utils",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "hypothesis",
+    "asgi-lifespan",
+    "ruff",
+    "mypy",
+    "pip-audit",
+]
+
+[tool.uv]
+# Version policy (07 section 2): latest stable release at least 30 days old.
+# 2026-11-01 minus 30 days. Move this date forward deliberately, never to "now".
+exclude-newer = "2026-10-02T00:00:00Z"
+# Documented exceptions (SPEC_ISSUES S23): security fixes for advisories reported by pip-audit may be newer than the cutoff.
+exclude-newer-package = { certifi = "2026-11-04T00:00:00Z", dnspython = "2026-11-04T00:00:00Z", opentelemetry-api = "2026-11-04T00:00:00Z" }
+package = false
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["."]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "B", "UP", "S", "ASYNC", "SIM", "RUF", "T20", "C4", "PT", "DTZ",
+]
+ignore = [
+    "E501",    # line width is enforced by the formatter; long comments and docstrings are allowed
+    "RUF012",  # SQLAlchemy/pydantic class attributes are intentionally mutable-looking
+    "S101",    # assert is fine in tests; app code never relies on it for control flow
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "S608", "DTZ001"]
+"migrations/**" = ["S608"]
+"app/cli.py" = ["T201"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
+# ---------------------------------------------------------------- mypy
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = "."
+explicit_package_bases = true
+warn_unreachable = true
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "integration: needs a real PostgreSQL",
+]
+filterwarnings = ["error::DeprecationWarning:app.*"]
+
+# ---------------------------------------------------------------- coverage
+[tool.coverage.run]
+source = ["app"]
+branch = true
+concurrency = ["greenlet", "thread"]  # SQLAlchemy asyncio runs code in greenlets; without this those lines count as unexecuted
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.$",
+]

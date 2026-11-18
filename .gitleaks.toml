@@ -1,0 +1,27 @@
+# Secret scanning (03 section 12). Extends the default ruleset; allowlists only the obviously fake, committed dev values.
+title = "revops-core gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dev-only placeholders that are public by design (compose, .env.example, docs, tests)"
+paths = [
+  '''^\.env\.example$''',
+  '''^docker-compose\.yml$''',
+  '''^docs/.*\.md$''',
+  '''^\.build/.*\.md$''',
+  '''^backend/tests/.*''',
+  '''^e2e/tests/helpers\.ts$''',
+  '''^e2e/scripts/start-stack\.sh$''',
+  '''package-lock\.json$''',
+  '''uv\.lock$''',
+]
+regexes = [
+  '''dev-only-[a-z-]+''',
+  '''fake-(key|webhook)-secret-dev-only''',
+  '''REPLACE_ME[A-Z_]*''',
+  '''rzp_test_REPLACE_ME''',
+  '''change-me-demo-only''',
+  '''e2e-(demo|owner|app|ai)-[a-z-]*(pw|password)[a-z0-9-]*''',
+]
