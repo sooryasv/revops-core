@@ -3,7 +3,7 @@
 # WROTE-NOT-RUN in the build sandbox (no Docker daemon); see docs/LOCAL_VERIFICATION.md.
 
 # ---- stage 1: build the SPA
-FROM node:22-slim AS web
+FROM node:26-slim AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN npm ci --no-audit --no-fund
